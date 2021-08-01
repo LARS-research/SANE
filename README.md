@@ -39,7 +39,8 @@ Please kindly cite [our paper](https://arxiv.org/abs/2104.06608) if you use this
     }
     
 ### Acknowledgement
-We thank Lanning Wei to help implement several experiments and further improve the codes in this work.
+The code is built on [DARTS](https://github.com/quark0/darts), one of the most well-known differentiable architecture search methods.
+Besides, we thank Lanning Wei, a research intern in our group, to help implement several experiments and further improve the codes in this work.
 
 ### Misc
 If you have any questions about this project, you can open issues, thus it can help more people who are interested in this project. We will reply to your issues as soon as possible. You are also welcomed to reach us by zhaohuan@4paradigm.com
