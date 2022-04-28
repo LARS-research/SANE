@@ -51,6 +51,7 @@ parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weigh
 parser.add_argument('--transductive', action='store_true', help='use transductive settings in train_search.')
 parser.add_argument('--with_conv_linear', type=bool, default=False, help=' in NAMixOp with linear op')
 parser.add_argument('--fix_last', type=bool, default=False, help='fix last layer in design architectures.')
+parser.add_argument('--num_layers', type=int, default=3, help='num of aggregation layers')
 
 args = parser.parse_args()
 
@@ -125,7 +126,7 @@ def main():
 
         criterion = nn.CrossEntropyLoss()
         criterion = criterion.cuda()
-        model = Network(criterion, dataset.num_features, dataset.num_classes, hidden_size, epsilon=args.epsilon, args=args)
+        model = Network(criterion, dataset.num_features, dataset.num_classes, hidden_size, num_layers=args.num_layers, epsilon=args.epsilon, args=args)
     else:
         hidden_size = 16
         criterion = nn.BCEWithLogitsLoss()
@@ -189,7 +190,8 @@ def train_trans(data, model, architect, criterion, optimizer, lr):
     top5 = utils.AvgrageMeter()
 
     model.train()
-    target = Variable(data.y[data.train_mask], requires_grad=False).to(device)
+    mask = data.train_mask
+    target = Variable(data.y[mask], requires_grad=False).to(device)
 
 
     #architecture send input or send logits, which are important for computation in architecture
@@ -197,7 +199,7 @@ def train_trans(data, model, architect, criterion, optimizer, lr):
 
     #train loss
     logits = model(data.to(device))
-    input = logits[data.train_mask].to(device)
+    input = logits[mask].to(device)
 
     optimizer.zero_grad()
     loss = criterion(input, target)
@@ -205,13 +207,15 @@ def train_trans(data, model, architect, criterion, optimizer, lr):
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
-    prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
-    n = input.size(0)
-    objs.update(loss.data.item(), n)
-    top1.update(prec1.data.item(), n)
-    top5.update(prec5.data.item(), n)
-
-    return top1.avg, objs.avg
+    acc = logits[mask].max(1)[1].eq(data.y[mask]).sum().item() / mask.sum().item()
+    return acc, loss/mask.sum().item()
+    # prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
+    # n = input.size(0)
+    # objs.update(loss.data.item(), n)
+    # top1.update(prec1.data.item(), n)
+    # top5.update(prec5.data.item(), n)
+    #
+    # return top1.avg, objs.avg
 
 def infer_trans(data, model, criterion, test=False):
     objs = utils.AvgrageMeter()
@@ -222,22 +226,29 @@ def infer_trans(data, model, criterion, test=False):
     with torch.no_grad():
         logits = model(data.to(device))
     if test:
-        input = logits[data.test_mask].to(device)
-        target = data.y[data.test_mask].to(device)
-        loss = criterion(input, target)
-        print('test_loss:', loss.item())
+        mask = data.test_mask
+        # input = logits[].to(device)
+        # target = data.y[data.test_mask].to(device)
+        # loss = criterion(input, target)
+        # print('test_loss:', loss.item())
     else:
-        input = logits[data.val_mask].to(device)
-        target = data.y[data.val_mask].to(device)
-        loss = criterion(input, target)
-        print('valid_loss:', loss.item())
-    prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
-    n = data.val_mask.sum().item()
-    objs.update(loss.data.item(), n)
-    top1.update(prec1.data.item(), n)
-    top5.update(prec5.data.item(), n)
+        mask = data.val_mask
+        # input = logits[data.val_mask].to(device)
+        # target = data.y[data.val_mask].to(device)
+        # loss = criterion(input, target)
+        # print('valid_loss:', loss.item())
+    input = logits[mask].to(device)
+    target = data.y[mask].to(device)
+    loss = criterion(input, target)
+    acc = input.max(1)[1].eq(target).sum().item() / mask.sum().item()
+    return acc, loss/mask.sum().item()
+    # prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
+    # n = data.val_mask.sum().item()
+    # objs.update(loss.data.item(), n)
+    # top1.update(prec1.data.item(), n)
+    # top5.update(prec5.data.item(), n)
 
-    return top1.avg, objs.avg
+    # return top1.avg, objs.avg
 def train_ppi(data, model, architect, criterion, optimizer, lr):
     model.train()
     total_loss = 0
@@ -307,4 +318,5 @@ def run_by_seed():
 
 if __name__ == '__main__':
     run_by_seed()
+
 

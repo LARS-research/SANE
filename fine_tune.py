@@ -14,7 +14,7 @@ from train4tune import main
 
 sane_space ={'model': 'SANE',
          'hidden_size': hp.choice('hidden_size', [16, 32, 64, 128, 256]),
-         'learning_rate': hp.uniform("lr", -3, -2),
+         'learning_rate': hp.uniform("lr", -3, -1.5),
          'weight_decay': hp.uniform("wr", -5, -3),
          'optimizer': hp.choice('opt', ['adagrad', 'adam']),
          'in_dropout': hp.choice('in_dropout', [0, 1, 2, 3, 4, 5, 6]),
@@ -51,26 +51,19 @@ def generate_args(arg_map):
     args = ARGS()
     for k, v in arg_map.items():
         setattr(args, k, v)
+    for k, v in args1.__dict__.items():
+        setattr(args, k, v)
     setattr(args, 'rnd_num', 1)
+
     args.learning_rate = 10**args.learning_rate
     args.weight_decay = 10**args.weight_decay
     args.in_dropout = args.in_dropout / 10.0
     args.out_dropout = args.out_dropout / 10.0
-    args.data = args1.data
     args.save = '{}_{}'.format(args.data, datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S'))
     args1.save = 'logs/tune-{}'.format(args.save)
-    args.epochs = args1.epochs
-    args.arch = args1.arch
-    args.gpu = args1.gpu
-    args.num_layers = args1.num_layers
     args.seed = 2
     args.grad_clip = 5
     args.momentum = 0.9
-    args.with_linear = args1.with_linear
-    args.with_layernorm = args1.with_layernorm
-    args.transductive = args1.transductive
-    args.cos_lr = args1.cos_lr
-    args.fix_last = args1.fix_last
     return args
 
 def objective(args):
@@ -176,4 +169,5 @@ if __name__ == '__main__':
     get_args()
     if args1.arch_filename:
         run_fine_tune()
+
 

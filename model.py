@@ -3,6 +3,7 @@ import torch.nn as nn
 from operations import *
 from torch.autograd import Variable
 from utils import drop_path
+from torch_geometric.nn import LayerNorm
 
 def act_map(act):
     if act == "linear":
@@ -90,7 +91,6 @@ class NetworkGNN(nn.Module):
                 [NaOp(ops[i], hidden_size, hidden_size, act, with_linear=args.with_linear) for i in range(num_layers)])
 
         #skip op
-
         if self.args.fix_last:
             if self.num_layers > 1:
                 self.sc_layers = nn.ModuleList([ScOp(ops[i+num_layers]) for i in range(num_layers - 1)])
@@ -104,12 +104,20 @@ class NetworkGNN(nn.Module):
                 print('skip_op:', skip_op)
             self.sc_layers = nn.ModuleList([ScOp(skip_op[i]) for i in range(num_layers)])
 
+        #layer norm
+        self.lns = torch.nn.ModuleList()
+        if self.args.with_layernorm:
+            for i in range(num_layers):
+                self.lns.append(LayerNorm(hidden_size, affine=True))
 
         #layer aggregator op
         self.layer6 = LaOp(ops[-1], hidden_size, 'linear', num_layers)
 
-        self.classifier = nn.Linear(hidden_size, out_dim)
-
+        # self.classifier = nn.Linear(hidden_size, out_dim)
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, out_dim))
         #self._initialize_alphas()
 
     def new(self):
@@ -128,8 +136,9 @@ class NetworkGNN(nn.Module):
         for i in range(self.num_layers):
             x = self.gnn_layers[i](x, edge_index)
             if self.args.with_layernorm:
-                layer_norm = nn.LayerNorm(normalized_shape=x.size(), elementwise_affine=False)
-                x = layer_norm(x)
+                # layer_norm = nn.LayerNorm(normalized_shape=x.size(), elementwise_affine=False)
+                # x = layer_norm(x)
+                x = self.lns[i](x)
             x = F.dropout(x, p=self.in_dropout, training=self.training)
             if i == self.num_layers - 1 and self.args.fix_last:
                 js.append(x)
@@ -185,4 +194,5 @@ class NetworkGNN(nn.Module):
         gene = _parse(F.softmax(self.na_alphas, dim=-1).data.cpu(), F.softmax(self.sc_alphas, dim=-1).data.cpu(), F.softmax(self.la_alphas, dim=-1).data.cpu())
 
         return gene
+
 

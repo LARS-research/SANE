@@ -35,7 +35,10 @@ SC_OPS={
 LA_OPS={
   'l_max': lambda hidden_size, num_layers: LaAggregator('max', hidden_size, num_layers),
   'l_concat': lambda hidden_size, num_layers: LaAggregator('cat', hidden_size, num_layers),
-  'l_lstm': lambda hidden_size, num_layers: LaAggregator('lstm', hidden_size, num_layers)
+  'l_lstm': lambda hidden_size, num_layers: LaAggregator('lstm', hidden_size, num_layers),
+  'l_sum': lambda hidden_size, num_layers: LaAggregator('sum', hidden_size, num_layers),
+  'l_att': lambda hidden_size, num_layers: LaAggregator('att', hidden_size, num_layers),
+  'l_mean': lambda hidden_size, num_layers: LaAggregator('mean', hidden_size, num_layers)
 }
 
 class NaAggregator(nn.Module):
@@ -70,14 +73,32 @@ class LaAggregator(nn.Module):
 
   def __init__(self, mode, hidden_size, num_layers=3):
     super(LaAggregator, self).__init__()
-    self.jump = JumpingKnowledge(mode, channels=hidden_size, num_layers=num_layers)
+    self.mode = mode
+    if mode in ['lstm', 'cat', 'max']:
+      self.jump = JumpingKnowledge(mode, channels=hidden_size, num_layers=num_layers)
+    elif mode == 'att':
+      self.att = Linear(hidden_size, 1)
+
     if mode == 'cat':
         self.lin = Linear(hidden_size * num_layers, hidden_size)
     else:
         self.lin = Linear(hidden_size, hidden_size)
 
   def forward(self, xs):
-    return self.lin(F.relu(self.jump(xs)))
+    if self.mode in ['lstm', 'cat', 'max']:
+      output = self.jump(xs)
+    elif self.mode == 'sum':
+      output = torch.stack(xs, dim=-1).sum(dim=-1)
+    elif self.mode == 'mean':
+      output = torch.stack(xs, dim=-1).mean(dim=-1)
+    elif self.mode == 'att':
+      input = torch.stack(xs, dim=-1).transpose(1, 2)
+      weight = self.att(input)
+      weight = F.softmax(weight, dim=1)
+      output = torch.mul(input, weight).transpose(1, 2).sum(dim=-1)
+
+    # return self.lin(F.relu(self.jump(xs)))
+    return self.lin(F.relu(output))
 
 class Identity(nn.Module):
 
@@ -94,4 +115,5 @@ class Zero(nn.Module):
 
   def forward(self, x):
     return x.mul(0.)
+
 

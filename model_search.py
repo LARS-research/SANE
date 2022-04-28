@@ -96,7 +96,7 @@ class Network(nn.Module):
     self.hidden_size = hidden_size
     self.num_layers = num_layers
     self._criterion = criterion
-    self.dropout=dropout
+    self.dropout = dropout
     self.epsilon = epsilon
     self.explore_num = 0
     self.with_linear = with_conv_linear
@@ -104,21 +104,34 @@ class Network(nn.Module):
 
     #node aggregator op
     self.lin1 = nn.Linear(in_dim, hidden_size)
-    self.layer1 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
-    self.layer2 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
-    self.layer3 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
+    self.layers = nn.ModuleList()
+    for i in range(self.num_layers):
+        self.layers.append(NaMixedOp(hidden_size, hidden_size,self.with_linear))
+    # self.layer1 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
+    # self.layer2 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
+    # self.layer3 = NaMixedOp(hidden_size, hidden_size,self.with_linear)
 
     #skip op
-    self.layer4 = ScMixedOp()
-    self.layer5 = ScMixedOp()
+    self.scops = nn.ModuleList()
+    for i in range(self.num_layers-1):
+        self.scops.append(ScMixedOp())
     if not self.args.fix_last:
-        self.layer6 = ScMixedOp()
+        self.scops.append(ScMixedOp())
+    # self.layer4 = ScMixedOp()
+    # self.layer5 = ScMixedOp()
+    # if not self.args.fix_last:
+    #     self.layer6 = ScMixedOp()
+
+
 
     #layer aggregator op
-    self.layer7 = LaMixedOp(hidden_size, num_layers)
+    self.laop = LaMixedOp(hidden_size, num_layers)
 
-    self.classifier = nn.Linear(hidden_size, out_dim)
-
+    # self.classifier = nn.Linear(hidden_size, out_dim)
+    self.classifier = nn.Sequential(
+        nn.Linear(hidden_size, hidden_size),
+        nn.ReLU(),
+        nn.Linear(hidden_size, out_dim))
     self._initialize_alphas()
 
   def new(self):
@@ -138,22 +151,31 @@ class Network(nn.Module):
     #generate weights by softmax
     x = self.lin1(x)
     x = F.dropout(x, p=self.dropout, training=self.training)
-    x1 = self.layer1(x, self.na_weights[0], edge_index)
-    x1 = F.dropout(x1, p=self.dropout, training=self.training)
-    x2 = self.layer2(x1, self.na_weights[1], edge_index)
-    x2 = F.dropout(x2, p=self.dropout, training=self.training)
-    x3 = self.layer3(x2, self.na_weights[2], edge_index)
-    x3 = F.dropout(x3, p=self.dropout, training=self.training)
+    jk = []
+    for i in range(self.num_layers):
+        x = self.layers[i](x, self.na_weights[0], edge_index)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        if self.args.fix_last and i == self.num_layers-1:
+            jk += [x]
+        else:
+            jk += [self.scops[i](x, self.sc_weights[i])]
+    # x1 = self.layer1(x, self.na_weights[0], edge_index)
+    # x1 = F.dropout(x1, p=self.dropout, training=self.training)
+    # x2 = self.layer2(x1, self.na_weights[1], edge_index)
+    # x2 = F.dropout(x2, p=self.dropout, training=self.training)
+    # x3 = self.layer3(x2, self.na_weights[2], edge_index)
+    # x3 = F.dropout(x3, p=self.dropout, training=self.training)
 
-    if self.args.fix_last:
-        x4 = (x3, self.layer4(x1, self.sc_weights[0]), self.layer5(x2, self.sc_weights[1]))
-    else:
-        x4 = (self.layer4(x1, self.sc_weights[0]), self.layer5(x2, self.sc_weights[1]), self.layer6(x3, self.sc_weights[2]))
+    # if self.args.fix_last:
+    #     x4 = (x3, self.layer4(x1, self.sc_weights[0]), self.layer5(x2, self.sc_weights[1]))
+    # else:
+    #     x4 = (self.layer4(x1, self.sc_weights[0]), self.layer5(x2, self.sc_weights[1]), self.layer6(x3, self.sc_weights[2]))
+    # x5 = self.layer7(x4, self.la_weights[0])
+    # x5 = F.dropout(x5, p=self.dropout, training=self.training)
 
-    x5 = self.layer7(x4, self.la_weights[0])
-    x5 = F.dropout(x5, p=self.dropout, training=self.training)
-
-    logits = self.classifier(x5)
+    merge_feature = self.laop(jk, self.la_weights[0])
+    merge_feature = F.dropout(merge_feature, p=self.dropout, training=self.training)
+    logits = self.classifier(merge_feature)
     return logits
 
   def _loss(self, data, is_valid=True):
@@ -264,5 +286,6 @@ class Network(nn.Module):
     self.sc_weights = weights[1]
     self.la_weights = weights[2]
     #self._arch_parameters = [self.na_alphas, self.sc_alphas, self.la_alphas]
+
 
 

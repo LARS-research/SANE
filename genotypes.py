@@ -2,7 +2,7 @@
 NA_PRIMITIVES = [
   'sage',
   'sage_sum',
-  'sage_max',
+  # 'sage_max',
   'gcn',
   'gin',
   'gat',
@@ -10,7 +10,7 @@ NA_PRIMITIVES = [
   'gat_cos',
   'gat_linear',
   'gat_generalized_linear',
-  'geniepath',
+  # 'geniepath',
 ]
 
 
@@ -21,7 +21,11 @@ SC_PRIMITIVES=[
 LA_PRIMITIVES=[
   'l_max',
   'l_concat',
-  'l_lstm'
+  'l_lstm',
+  'l_sum',
+  'l_att',
+  'l_mean'
 ]
+
 
 

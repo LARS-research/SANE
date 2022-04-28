@@ -98,7 +98,6 @@ def main(exp_args):
         data.edge_index = edge_index
         num_features = dataset.num_features
         num_classes = dataset.num_classes
-
         criterion = nn.CrossEntropyLoss()
     else:
         criterion = nn.BCEWithLogitsLoss()
@@ -170,30 +169,25 @@ def infer(dataset_name, data, model, criterion, test=False):
         return infer_trans(data, model, criterion, test=test)
 
 def train_trans(data, model, criterion, optimizer):
-    objs = utils.AvgrageMeter()
-    top1 = utils.AvgrageMeter()
-    top5 = utils.AvgrageMeter()
 
+    mask = data.train_mask
     model.train()
-    target = data.y[data.train_mask].to(device)
+    target = data.y[mask].to(device)
 
     optimizer.zero_grad()
     logits = model(data.to(device))
 
-    input = logits[data.train_mask].to(device)
+    input = logits[mask].to(device)
 
     loss = criterion(input, target)
     loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), train_args.grad_clip)
     optimizer.step()
 
-    prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
-    n = input.size(0)
-    objs.update(loss.data.item(), n)
-    top1.update(prec1.data.item(), n)
-    top5.update(prec5.data.item(), n)
+    acc = logits[mask].max(1)[1].eq(data.y[mask]).sum().item() / mask.sum().item()
+    return acc, loss/mask.sum().item()
 
-    return top1.avg, objs.avg
+
 
 def infer_trans(data, model, criterion, test=False):
     objs = utils.AvgrageMeter()
@@ -211,13 +205,15 @@ def infer_trans(data, model, criterion, test=False):
     target = data.y[mask].to(device)
     loss = criterion(input, target)
 
-    prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
-    n = data.val_mask.sum().item()
-    objs.update(loss.data.item(), n)
-    top1.update(prec1.data.item(), n)
-    top5.update(prec5.data.item(), n)
+    acc = logits[mask].max(1)[1].eq(data.y[mask]).sum().item() / mask.sum().item()
+    return acc, loss/mask.sum().item()
 
-    return top1.avg, objs.avg
+    # prec1, prec5 = utils.accuracy(input, target, topk=(1, 3))
+    # n = data.val_mask.sum().item()
+    # objs.update(loss.data.item(), n)
+    # top1.update(prec1.data.item(), n)
+    # top5.update(prec5.data.item(), n)
+    # return top1.avg, objs.avg
 
 def train_ppi(data, model, criterion, optimizer):
     model.train()
@@ -270,5 +266,6 @@ def infer_ppi(data, model, criterion, test=False):
 
 if __name__ == '__main__':
   main()
+
 
 
