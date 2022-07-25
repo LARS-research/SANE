@@ -263,19 +263,19 @@ class Network(nn.Module):
     num_la_ops = len(LA_PRIMITIVES)
 
 
-    na_alphas = Variable(torch.zeros(3, num_na_ops).cuda(), requires_grad=True)
-    sc_alphas = Variable(torch.zeros(2, num_sc_ops).cuda(), requires_grad=True)
+    na_alphas = Variable(torch.zeros(self.num_layers, num_na_ops).cuda(), requires_grad=True)
+    sc_alphas = Variable(torch.zeros(self.num_layers-1, num_sc_ops).cuda(), requires_grad=True)
     la_alphas = Variable(torch.zeros(1, num_la_ops).cuda(), requires_grad=True)
 
-    for i in range(3):
+    for i in range(self.num_layers):
         ind = NA_PRIMITIVES.index(arch_ops[i])
         na_alphas[i][ind] = 1
 
-    for i in range(3, 5):
+    for i in range(self.num_layers, self.num_layers * 2 - 1):
         ind = SC_PRIMITIVES.index(arch_ops[i])
-        sc_alphas[i-3][ind] = 1
+        sc_alphas[i-self.num_layers][ind] = 1
 
-    ind = LA_PRIMITIVES.index(arch_ops[5])
+    ind = LA_PRIMITIVES.index(arch_ops[self.num_layers*2-1])
     la_alphas[0][ind] = 1
 
     arch_parameters = [na_alphas, sc_alphas, la_alphas]
