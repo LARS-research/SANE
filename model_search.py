@@ -153,7 +153,7 @@ class Network(nn.Module):
     x = F.dropout(x, p=self.dropout, training=self.training)
     jk = []
     for i in range(self.num_layers):
-        x = self.layers[i](x, self.na_weights[0], edge_index)
+        x = self.layers[i](x, self.na_weights[i], edge_index)
         x = F.dropout(x, p=self.dropout, training=self.training)
         if self.args.fix_last and i == self.num_layers-1:
             jk += [x]
@@ -200,11 +200,11 @@ class Network(nn.Module):
     num_la_ops = len(LA_PRIMITIVES)
 
     #self.alphas_normal = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True)
-    self.na_alphas = Variable(1e-3*torch.randn(3, num_na_ops).cuda(), requires_grad=True)
+    self.na_alphas = Variable(1e-3*torch.randn(self.num_layers, num_na_ops).cuda(), requires_grad=True)
     if self.args.fix_last:
-        self.sc_alphas = Variable(1e-3*torch.randn(2, num_sc_ops).cuda(), requires_grad=True)
+        self.sc_alphas = Variable(1e-3*torch.randn(self.num_layers-1, num_sc_ops).cuda(), requires_grad=True)
     else:
-        self.sc_alphas = Variable(1e-3*torch.randn(3, num_sc_ops).cuda(), requires_grad=True)
+        self.sc_alphas = Variable(1e-3*torch.randn(self.num_layers, num_sc_ops).cuda(), requires_grad=True)
 
     self.la_alphas = Variable(1e-3*torch.randn(1, num_la_ops).cuda(), requires_grad=True)
     self._arch_parameters = [
